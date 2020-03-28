@@ -4,6 +4,8 @@ use chrono::{Duration, NaiveDate, Utc};
 use phf::phf_map;
 use structopt::{clap, StructOpt};
 
+use eurostar::get_trains;
+
 static NOW: &str = "now";
 static PLUS_TWO_WEEKS: &str = "+2 weeks";
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
@@ -53,6 +55,10 @@ struct Opt {
     #[structopt(short, long)]
     days: Option<i32>,
 
+    /// Max price per journey
+    #[structopt(short, long)]
+    price: Option<i16>,
+
     /// Eurostar API key
     #[structopt(short, long)]
     api_key: i64,
@@ -75,5 +81,7 @@ fn main() {
         )
         .exit();
     }
-    println!("{:#?}", opt);
+
+    let trains = get_trains(opt.from, opt.to, opt.since, opt.until, opt.price);
+    println!("{:#?}", trains);
 }

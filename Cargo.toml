@@ -10,3 +10,11 @@ edition = "2018"
 structopt = "0.3.12"
 chrono = "0.4.11"
 phf = {version = "0.8.0", features = ["macros"]}
+
+[lib]
+name = "eurostar"
+path = "src/lib.rs"
+
+[[bin]]
+name = "eurostar"
+path = "src/main.rs"
