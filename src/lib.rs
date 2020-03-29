@@ -15,7 +15,7 @@ pub struct Train {
 }
 
 pub fn get_trains(
-    api_key: i64,
+    api_key: &str,
     from: i32,
     to: i32,
     since: NaiveDate,

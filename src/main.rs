@@ -62,7 +62,7 @@ struct Opt {
 
     /// Eurostar API key
     #[structopt(short, long)]
-    api_key: i64,
+    api_key: String,
 
     /// Start station
     #[structopt(parse(try_from_str = parse_station), default_value="London")]
@@ -85,7 +85,7 @@ fn main() {
     }
 
     let trains = get_trains(
-        opt.api_key,
+        &opt.api_key,
         opt.from,
         opt.to,
         opt.since,
