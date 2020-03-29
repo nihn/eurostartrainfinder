@@ -1,27 +1,21 @@
 extern crate structopt;
 
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::NaiveDate;
+use log::error;
 use phf::phf_map;
 use stderrlog;
 use structopt::{clap, StructOpt};
 
-use eurostar::get_trains;
+mod date;
+mod process;
+mod query;
+use process::get_journeys;
+use query::get_trains;
 
-static NOW: &str = "now";
-static PLUS_TWO_WEEKS: &str = "+2 weeks";
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
     "Paris" => 8727100,
 };
-
-fn parse_date(date: &str) -> Result<NaiveDate, chrono::format::ParseError> {
-    if date == NOW {
-        return Ok(Utc::today().naive_local());
-    } else if date == PLUS_TWO_WEEKS {
-        return Ok(Utc::today().naive_local() + Duration::weeks(2));
-    }
-    NaiveDate::parse_from_str(date, "%Y-%m-%d")
-}
 
 fn parse_station(station: &str) -> Result<i32, String> {
     match STATION_TO_ID.get(station) {
@@ -45,20 +39,20 @@ struct Opt {
     verbose: usize,
 
     /// Since what date we should look
-    #[structopt(short, long, parse(try_from_str = parse_date), default_value=NOW)]
+    #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::NOW)]
     since: NaiveDate,
 
     /// To what date we should look
-    #[structopt(short, long, parse(try_from_str = parse_date), default_value=PLUS_TWO_WEEKS)]
+    #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::PLUS_TWO_WEEKS)]
     until: NaiveDate,
 
     /// Number of days to stay, if supplied it will print the return journeys
     #[structopt(short, long)]
-    days: Option<i32>,
+    days: Option<i16>,
 
     /// Max price per journey
     #[structopt(short, long)]
-    price: Option<i16>,
+    price: Option<f32>,
 
     /// Eurostar API key
     #[structopt(short, long)]
@@ -84,15 +78,15 @@ fn main() {
         .exit();
     }
 
-    let trains = get_trains(
-        &opt.api_key,
-        opt.from,
-        opt.to,
-        opt.since,
-        opt.until,
-        opt.price,
-    );
-    println!("{:#?}", trains);
+    let trains = match get_trains(&opt.api_key, opt.from, opt.to, opt.since, opt.until) {
+        Ok(res) => res,
+        Err(err) => {
+            error!("{:?}", err);
+            std::process::exit(1);
+        }
+    };
+    let journeys = get_journeys(vec![trains], opt.price);
+    println!("{:#?}", journeys);
 }
 
 fn setup_logging(level: usize) {
