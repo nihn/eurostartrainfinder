@@ -82,6 +82,13 @@ fn main() {
         .exit();
     }
 
-    let trains = get_trains(opt.from, opt.to, opt.since, opt.until, opt.price);
+    let trains = get_trains(
+        opt.api_key,
+        opt.from,
+        opt.to,
+        opt.since,
+        opt.until,
+        opt.price,
+    );
     println!("{:#?}", trains);
 }
