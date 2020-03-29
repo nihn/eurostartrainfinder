@@ -1,6 +1,7 @@
 use chrono::{NaiveDate, Utc};
-use log::debug;
-use reqwest::{Client, RequestBuilder};
+use log::{debug, error, warn};
+use reqwest::blocking::Client;
+use reqwest::{Error, StatusCode};
 
 static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en";
 static API_KEY_HEADER: &str = "x-apikey";
@@ -32,6 +33,25 @@ pub fn get_trains(
         .header(API_KEY_HEADER, api_key);
 
     debug!("Prepared request: {:?}", request);
+
+    let response = match request.send() {
+        Ok(res) => res,
+        Err(err) => {
+            error!("Got error when querying API: {:?}", err);
+            return vec![];
+        }
+    };
+
+    let status = response.status();
+
+    if status.is_client_error() {
+        error!("Got {} response", status);
+    } else if status.is_server_error() {
+        warn!("Got {} response", status)
+    } else {
+        debug!("Got {} response", status);
+    }
+
     vec![Train {
         from: from,
         to: to,
