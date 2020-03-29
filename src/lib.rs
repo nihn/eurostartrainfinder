@@ -2,7 +2,7 @@ use chrono::{NaiveDate, Utc};
 use log::debug;
 use reqwest::{Client, RequestBuilder};
 
-static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en/";
+static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en";
 static API_KEY_HEADER: &str = "x-apikey";
 
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub fn get_trains(
 ) -> Vec<Train> {
     let client = Client::new();
     let request = client
-        .get(format!("{}/{}/{}", EUROSTAR_URL, from, to).as_str())
+        .get(&format!("{}/{}/{}", EUROSTAR_URL, from, to))
         .query(&[
             ("outbound-date", format_date(since)),
             ("inbound-date", format_date(until)),
