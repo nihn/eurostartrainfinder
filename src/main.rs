@@ -2,6 +2,7 @@ extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Utc};
 use phf::phf_map;
+use stderrlog;
 use structopt::{clap, StructOpt};
 
 use eurostar::get_trains;
@@ -41,7 +42,7 @@ fn parse_station(station: &str) -> Result<i32, String> {
 struct Opt {
     /// Verbose mode (-v, -vv, -vvv, etc.)
     #[structopt(short, long, parse(from_occurrences))]
-    verbose: u8,
+    verbose: usize,
 
     /// Since what date we should look
     #[structopt(short, long, parse(try_from_str = parse_date), default_value=NOW)]
@@ -74,6 +75,7 @@ struct Opt {
 
 fn main() {
     let opt = Opt::from_args();
+    setup_logging(opt.verbose);
 
     if opt.from == opt.to {
         clap::Error::value_validation_auto(
@@ -91,4 +93,13 @@ fn main() {
         opt.price,
     );
     println!("{:#?}", trains);
+}
+
+fn setup_logging(level: usize) {
+    stderrlog::new()
+        .module(module_path!())
+        .verbosity(level)
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()
+        .unwrap();
 }

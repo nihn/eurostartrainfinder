@@ -1,9 +1,9 @@
 use chrono::{NaiveDate, Utc};
+use log::debug;
 use reqwest::{Client, RequestBuilder};
 
 static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en/";
 static API_KEY_HEADER: &str = "x-apikey";
-
 
 #[derive(Debug)]
 pub struct Train {
@@ -31,6 +31,7 @@ pub fn get_trains(
         ])
         .header(API_KEY_HEADER, api_key);
 
+    debug!("Prepared request: {:?}", request);
     vec![Train {
         from: from,
         to: to,
