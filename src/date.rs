@@ -1,4 +1,3 @@
-use chrono::format::Numeric::WeekdayFromMon;
 use chrono::{Duration, NaiveDate, NaiveTime, Utc, Weekday};
 use serde::{self, Deserialize, Deserializer};
 use std::fmt;
@@ -8,7 +7,7 @@ static TIME_FORMAT: &'static str = "%H:%M";
 pub static NOW: &str = "now";
 pub static PLUS_TWO_WEEKS: &str = "+2 weeks";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParseError {
     ChronoError(chrono::format::ParseError),
     DateInThePastError(String),
@@ -66,8 +65,50 @@ pub fn parse_weekday_from_str(weekday: &str) -> Result<Weekday, ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::date::parse_weekday_from_str;
-    use chrono::Weekday;
+    use crate::date::{
+        parse_date_from_str, parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS,
+    };
+    use chrono::{Duration, NaiveDate, Utc, Weekday};
+
+    #[test]
+    fn test_parse_date_from_str_now() {
+        assert_eq!(
+            parse_date_from_str(NOW).unwrap(),
+            Utc::today().naive_local()
+        );
+    }
+
+    #[test]
+    fn test_parse_date_from_str_two_weeks_in_the_future() {
+        assert_eq!(
+            parse_date_from_str(PLUS_TWO_WEEKS).unwrap(),
+            Utc::today().naive_local() + Duration::weeks(2)
+        );
+    }
+
+    #[test]
+    fn test_parse_date_from_str() {
+        assert_eq!(
+            parse_date_from_str("2020-03-31").unwrap(),
+            NaiveDate::from_ymd(2020, 03, 31),
+        );
+    }
+
+    #[test]
+    fn test_parse_date_from_str_in_the_past() {
+        assert_eq!(
+            parse_date_from_str("2020-03-30").unwrap_err(),
+            ParseError::DateInThePastError("2020-03-30 is in the past!".to_string()),
+        )
+    }
+
+    #[test]
+    fn test_parse_date_from_str_invalid() -> Result<(), String> {
+        match parse_date_from_str("foo") {
+            Err(ParseError::ChronoError(_)) => Ok(()),
+            _ => Err("Should fail with ParseError::ChronoError".to_string()),
+        }
+    }
 
     #[test]
     fn test_parse_weekday_from_str() {
@@ -84,5 +125,10 @@ mod tests {
         for (string, weekday) in cases.iter() {
             assert_eq!(&parse_weekday_from_str(string).unwrap(), weekday)
         }
+    }
+
+    #[test]
+    fn test_parse_weekday_from_str_invalid() {
+        assert!(parse_weekday_from_str("invalid").is_err())
     }
 }
