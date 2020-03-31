@@ -1,6 +1,8 @@
-use chrono::{Duration, NaiveDate, NaiveTime, Utc};
+use chrono::format::Numeric::WeekdayFromMon;
+use chrono::{Duration, NaiveDate, NaiveTime, Utc, Weekday};
 use serde::{self, Deserialize, Deserializer};
 use std::fmt;
+
 static USER_FORMAT: &'static str = "%Y-%m-%d";
 static TIME_FORMAT: &'static str = "%H:%M";
 pub static NOW: &str = "now";
@@ -10,13 +12,14 @@ pub static PLUS_TWO_WEEKS: &str = "+2 weeks";
 pub enum ParseError {
     ChronoError(chrono::format::ParseError),
     DateInThePastError(String),
+    InvalidWeekday(String),
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ParseError::ChronoError(err) => write!(f, "{}", err),
-            ParseError::DateInThePastError(msg) => write!(f, "{}", msg),
+            msg => write!(f, "{}", msg),
         }
     }
 }
@@ -43,4 +46,43 @@ pub fn parse_date_from_str(date: &str) -> Result<NaiveDate, ParseError> {
         )));
     }
     Ok(parsed)
+}
+
+pub fn parse_weekday_from_str(weekday: &str) -> Result<Weekday, ParseError> {
+    match weekday.to_lowercase().as_str() {
+        "monday" => Ok(Weekday::Mon),
+        "tuesday" => Ok(Weekday::Tue),
+        "wednesday" => Ok(Weekday::Wed),
+        "thursday" => Ok(Weekday::Thu),
+        "friday" => Ok(Weekday::Fri),
+        "saturday" => Ok(Weekday::Sat),
+        "sunday" => Ok(Weekday::Sun),
+        day => Err(ParseError::InvalidWeekday(format!(
+            "{} is an invalid weekday name!",
+            day
+        ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::date::parse_weekday_from_str;
+    use chrono::Weekday;
+
+    #[test]
+    fn test_parse_weekday_from_str() {
+        let cases = vec![
+            ("monday", Weekday::Mon),
+            ("Tuesday", Weekday::Tue),
+            ("WEDNESDAY", Weekday::Wed),
+            ("thursDay", Weekday::Thu),
+            ("friday", Weekday::Fri),
+            ("Saturday", Weekday::Sat),
+            ("SUNDAY", Weekday::Sun),
+        ];
+
+        for (string, weekday) in cases.iter() {
+            assert_eq!(&parse_weekday_from_str(string).unwrap(), weekday)
+        }
+    }
 }

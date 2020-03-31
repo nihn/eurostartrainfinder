@@ -1,6 +1,6 @@
 extern crate structopt;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Weekday};
 use log::error;
 use phf::phf_map;
 use stderrlog;
@@ -49,6 +49,10 @@ struct Opt {
     /// Number of days to stay, if supplied it will print the return journeys
     #[structopt(short, long)]
     days: Option<i16>,
+
+    /// Which days of the week should be considered as a start of a journey
+    #[structopt(short, long, parse(try_from_str = date::parse_weekday_from_str))]
+    weekday: Option<Weekday>,
 
     /// Max price per journey
     #[structopt(short, long)]
