@@ -92,7 +92,7 @@ pub fn get_possible_travel_dates(
         Some(weekday) => {
             let mut day = from;
             while day.weekday() != weekday {
-                day = from.succ();
+                day = day.succ();
             }
             day
         }
@@ -100,11 +100,11 @@ pub fn get_possible_travel_dates(
     };
     let mut inbound = outbound + days;
 
-    if outbound > until {
+    if inbound > until {
         return Err("There is no possible out-inbound dates which could satisfy your query");
     };
 
-    while inbound < until {
+    while inbound <= until {
         results.push((outbound, inbound));
         outbound = match weekday {
             Some(_) => outbound + Duration::days(7),
@@ -119,8 +119,8 @@ pub fn get_possible_travel_dates(
 #[cfg(test)]
 mod tests {
     use crate::date::{
-        parse_date_from_str, parse_duration_from_str, parse_weekday_from_str, ParseError, NOW,
-        PLUS_TWO_WEEKS,
+        get_possible_travel_dates, parse_date_from_str, parse_duration_from_str,
+        parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS,
     };
     use chrono::{Duration, NaiveDate, Utc, Weekday};
 
@@ -206,5 +206,70 @@ mod tests {
     #[test]
     fn test_parse_weekday_from_str_invalid() {
         assert!(parse_weekday_from_str("invalid").is_err())
+    }
+
+    #[test]
+    fn test_get_possible_travel_dates_impossible_constraints() {
+        let msg = "There is no possible out-inbound dates which could satisfy your query";
+        match get_possible_travel_dates(
+            NaiveDate::from_ymd(2020, 1, 1),
+            NaiveDate::from_ymd(2020, 1, 3),
+            Duration::days(3),
+            None,
+        ) {
+            Err(err) => assert_eq!(err, msg),
+            _ => panic!("get_possible_travel_dates should have return error!"),
+        };
+
+        match get_possible_travel_dates(
+            NaiveDate::from_ymd(2020, 4, 1),
+            NaiveDate::from_ymd(2020, 4, 10),
+            Duration::days(6),
+            Some(Weekday::Tue),
+        ) {
+            Err(err) => assert_eq!(err, msg),
+            _ => panic!("get_possible_travel_dates should have return error!"),
+        };
+    }
+
+    #[test]
+    fn test_get_possible_travel_dates_ok() {
+        assert_eq!(
+            get_possible_travel_dates(
+                NaiveDate::from_ymd(2020, 1, 1),
+                NaiveDate::from_ymd(2020, 1, 6),
+                Duration::days(3),
+                None,
+            )
+            .unwrap(),
+            vec![
+                (
+                    NaiveDate::from_ymd(2020, 1, 1),
+                    NaiveDate::from_ymd(2020, 1, 4)
+                ),
+                (
+                    NaiveDate::from_ymd(2020, 1, 2),
+                    NaiveDate::from_ymd(2020, 1, 5)
+                ),
+                (
+                    NaiveDate::from_ymd(2020, 1, 3),
+                    NaiveDate::from_ymd(2020, 1, 6)
+                ),
+            ]
+        );
+
+        assert_eq!(
+            get_possible_travel_dates(
+                NaiveDate::from_ymd(2020, 4, 1),
+                NaiveDate::from_ymd(2020, 4, 6),
+                Duration::days(3),
+                Some(Weekday::Wed),
+            )
+            .unwrap(),
+            vec![(
+                NaiveDate::from_ymd(2020, 4, 1),
+                NaiveDate::from_ymd(2020, 4, 4)
+            ),]
+        )
     }
 }
