@@ -119,9 +119,31 @@ pub fn get_possible_travel_dates(
 #[cfg(test)]
 mod tests {
     use crate::date::{
-        parse_date_from_str, parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS,
+        parse_date_from_str, parse_duration_from_str, parse_weekday_from_str, ParseError, NOW,
+        PLUS_TWO_WEEKS,
     };
     use chrono::{Duration, NaiveDate, Utc, Weekday};
+
+    #[test]
+    fn test_duration_from_str() {
+        assert_eq!(parse_duration_from_str("3").unwrap(), Duration::days(3),)
+    }
+
+    #[test]
+    fn test_duration_from_str_below_zero() {
+        assert_eq!(
+            parse_duration_from_str("-1").unwrap_err(),
+            ParseError::DateInThePastError("Number of days must be greater than 0!".to_string()),
+        )
+    }
+
+    #[test]
+    fn test_duration_from_str_invalid_number() -> Result<(), String> {
+        match parse_duration_from_str("foo") {
+            Err(ParseError::ParseIntError(_)) => Ok(()),
+            _ => Err("Should raise ParseError".to_string()),
+        }
+    }
 
     #[test]
     fn test_parse_date_from_str_now() {
@@ -141,9 +163,10 @@ mod tests {
 
     #[test]
     fn test_parse_date_from_str() {
+        let today = Utc::now().naive_local().date();
         assert_eq!(
-            parse_date_from_str("2020-03-31").unwrap(),
-            NaiveDate::from_ymd(2020, 03, 31),
+            parse_date_from_str(&today.format("%Y-%m-%d").to_string()).unwrap(),
+            today,
         );
     }
 
