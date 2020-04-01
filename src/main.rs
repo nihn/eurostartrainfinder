@@ -1,7 +1,7 @@
 extern crate structopt;
 
-use chrono::{NaiveDate, Weekday};
-use log::error;
+use chrono::{Duration, NaiveDate, Weekday};
+use log::{debug, error};
 use phf::phf_map;
 use stderrlog;
 use structopt::{clap, StructOpt};
@@ -46,9 +46,9 @@ struct Opt {
     #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::PLUS_TWO_WEEKS)]
     until: NaiveDate,
 
-    /// Number of days to stay, if supplied it will print the return journeys
-    #[structopt(short, long)]
-    days: Option<i16>,
+    /// Number of days to stay
+    #[structopt(short, long, parse(try_from_str = date::parse_duration_from_str))]
+    days: Duration,
 
     /// Which days of the week should be considered as a start of a journey
     #[structopt(short, long, parse(try_from_str = date::parse_weekday_from_str))]
@@ -81,6 +81,14 @@ fn main() {
         )
         .exit();
     }
+
+    let travels = match date::get_possible_travel_dates(opt.since, opt.until, opt.days, opt.weekday)
+    {
+        Ok(res) => res,
+        Err(err) => clap::Error::value_validation_auto(err.to_string()).exit(),
+    };
+
+    debug!("Possible travel dates: {:#?}", travels);
 
     let trains = match get_trains(&opt.api_key, opt.from, opt.to, opt.since, opt.until) {
         Ok(res) => res,

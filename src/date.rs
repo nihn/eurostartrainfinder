@@ -1,6 +1,7 @@
-use chrono::{Duration, NaiveDate, NaiveTime, Utc, Weekday};
+use chrono::{Datelike, Duration, NaiveDate, NaiveTime, Utc, Weekday};
 use serde::{self, Deserialize, Deserializer};
 use std::fmt;
+use std::num::ParseIntError;
 
 static USER_FORMAT: &'static str = "%Y-%m-%d";
 static TIME_FORMAT: &'static str = "%H:%M";
@@ -12,6 +13,7 @@ pub enum ParseError {
     ChronoError(chrono::format::ParseError),
     DateInThePastError(String),
     InvalidWeekday(String),
+    ParseIntError(ParseIntError),
 }
 
 impl fmt::Display for ParseError {
@@ -29,6 +31,21 @@ where
 {
     let s = String::deserialize(deserializer)?;
     NaiveTime::parse_from_str(&s, TIME_FORMAT).map_err(serde::de::Error::custom)
+}
+
+pub fn parse_duration_from_str(days: &str) -> Result<Duration, ParseError> {
+    match days.parse() {
+        Ok(res) => {
+            if res >= 0 {
+                Ok(Duration::days(res))
+            } else {
+                Err(ParseError::DateInThePastError(
+                    "Number of days must be greater than 0!".to_string(),
+                ))
+            }
+        }
+        Err(err) => Err(ParseError::ParseIntError(err)),
+    }
 }
 
 pub fn parse_date_from_str(date: &str) -> Result<NaiveDate, ParseError> {
@@ -61,6 +78,42 @@ pub fn parse_weekday_from_str(weekday: &str) -> Result<Weekday, ParseError> {
             day
         ))),
     }
+}
+
+pub fn get_possible_travel_dates(
+    from: NaiveDate,
+    until: NaiveDate,
+    days: Duration,
+    weekday: Option<Weekday>,
+) -> Result<Vec<(NaiveDate, NaiveDate)>, &'static str> {
+    let mut results = Vec::new();
+
+    let mut outbound = match weekday {
+        Some(weekday) => {
+            let mut day = from;
+            while day.weekday() != weekday {
+                day = from.succ();
+            }
+            day
+        }
+        None => from,
+    };
+    let mut inbound = outbound + days;
+
+    if outbound > until {
+        return Err("There is no possible out-inbound dates which could satisfy your query");
+    };
+
+    while inbound < until {
+        results.push((outbound, inbound));
+        outbound = match weekday {
+            Some(_) => outbound + Duration::days(7),
+            None => outbound.succ(),
+        };
+        inbound = outbound + days;
+    }
+
+    Ok(results)
 }
 
 #[cfg(test)]
