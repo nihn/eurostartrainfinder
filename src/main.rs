@@ -88,7 +88,15 @@ fn main() {
         Err(err) => clap::Error::value_validation_auto(err.to_string()).exit(),
     };
 
-    debug!("Possible travel dates: {:#?}", travels);
+    if travels.is_empty() {
+        clap::Error::value_validation_auto(
+            "There are not dates pair matching your criteria!".to_string(),
+        )
+        .exit();
+    } else {
+        debug!("Possible travel dates: {:#?}", travels);
+    }
+
 
     let trains = match get_trains(&opt.api_key, opt.from, opt.to, opt.since, opt.until) {
         Ok(res) => res,
