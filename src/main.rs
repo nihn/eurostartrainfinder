@@ -76,12 +76,16 @@ struct Opt {
     #[structopt(long, possible_values = &SortBy::variants(), case_insensitive = true, default_value = "price")]
     sort_by: SortBy,
 
+    /// How many adults
+    #[structopt(long, default_value = "1")]
+    adults: i16,
+
     /// Start station
-    #[structopt(parse(try_from_str = parse_station), default_value="London")]
+    #[structopt(parse(try_from_str = parse_station), default_value = "London")]
     from: i32,
 
     /// Finish station
-    #[structopt(parse(try_from_str = parse_station), default_value="Paris")]
+    #[structopt(parse(try_from_str = parse_station), default_value = "Paris")]
     to: i32,
 }
 
@@ -120,6 +124,7 @@ fn main() {
             opt.to,
             *outbound_date,
             *inbound_date,
+            opt.adults,
         ) {
             Ok(res) => res,
             Err(err) => {

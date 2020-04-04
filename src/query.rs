@@ -58,6 +58,7 @@ pub fn get_trains(
     to: i32,
     since: NaiveDate,
     until: NaiveDate,
+    adults: i16,
 ) -> Result<(Vec<Train>, Vec<Train>), QueryError> {
     let client = Client::new();
     let request = client
@@ -65,7 +66,7 @@ pub fn get_trains(
         .query(&[
             ("outbound-date", format_date(since)),
             ("inbound-date", format_date(until)),
-            ("adult", "1".to_string()),
+            ("adult", adults.to_string()),
         ])
         .header(API_KEY_HEADER, api_key);
 
