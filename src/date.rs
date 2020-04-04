@@ -34,10 +34,10 @@ where
 }
 
 pub fn parse_duration_from_str(days: &str) -> Result<Duration, ParseError> {
-    match days.parse() {
+    match days.parse::<i64>() {
         Ok(res) => {
-            if res >= 0 {
-                Ok(Duration::days(res))
+            if res >= 1 {
+                Ok(Duration::days(res - 1))
             } else {
                 Err(ParseError::DateInThePastError(
                     "Number of days must be greater than 0!".to_string(),

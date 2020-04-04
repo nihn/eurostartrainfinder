@@ -1,9 +1,9 @@
 extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Weekday};
-use log::{debug, info, error};
+use log::{debug, error, info};
 use phf::phf_map;
-use prettytable::{Table, row, cell, format};
+use prettytable::{cell, format, row, Table};
 use stderrlog;
 use structopt::{clap, StructOpt};
 
@@ -47,7 +47,7 @@ struct Opt {
     #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::PLUS_TWO_WEEKS)]
     until: NaiveDate,
 
-    /// Number of days to stay
+    /// Number of days to stay (e.g. Friday - Sunday would be 3 days)
     #[structopt(short, long, parse(try_from_str = date::parse_duration_from_str))]
     days: Duration,
 
