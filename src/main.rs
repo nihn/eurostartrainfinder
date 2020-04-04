@@ -1,15 +1,16 @@
 extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Weekday};
-use log::{debug, error};
+use log::{debug, info, error};
 use phf::phf_map;
+use prettytable::{Table, row, cell, format};
 use stderrlog;
 use structopt::{clap, StructOpt};
 
 mod date;
 mod process;
 mod query;
-use process::filter_journeys;
+use process::{filter_journeys, TrainJourney};
 use query::get_trains;
 
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
@@ -117,11 +118,22 @@ fn main() {
     }
 
     if journeys.is_empty() {
-        prinln!("There was no journey matching supplied criteria :(")
+        println!("There was no journey matching supplied criteria :(")
     } else {
         info!("Found {} journeys matching criteria.", journeys.len());
-        println!("{:#?}", journeys);
+        format_results(journeys).printstd();
     }
+}
+
+fn format_results(journeys: Vec<TrainJourney>) -> Table {
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+    table.set_titles(row!["Outbound", "Inbound", "Price"]);
+
+    for journey in journeys.iter() {
+        table.add_row(row![journey.outbound, journey.inbound, journey.price]);
+    }
+    table
 }
 
 fn setup_logging(level: usize) {

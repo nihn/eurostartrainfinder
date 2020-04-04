@@ -4,9 +4,9 @@ use crate::query::Train;
 
 #[derive(Debug)]
 pub struct TrainJourney {
-    outbound: NaiveDateTime,
-    inbound: NaiveDateTime,
-    price: f32,
+    pub outbound: NaiveDateTime,
+    pub inbound: NaiveDateTime,
+    pub price: f32,
 }
 
 pub fn filter_journeys(
