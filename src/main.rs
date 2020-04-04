@@ -1,6 +1,7 @@
 extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Weekday};
+use clap::arg_enum;
 use log::{debug, error, info};
 use phf::phf_map;
 use prettytable::{cell, format, row, Table};
@@ -17,6 +18,14 @@ static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
     "Paris" => 8727100,
 };
+
+arg_enum! {
+    #[derive(Debug)]
+    enum SortBy {
+        Price,
+        Date,
+    }
+}
 
 fn parse_station(station: &str) -> Result<i32, String> {
     match STATION_TO_ID.get(station) {
@@ -62,6 +71,10 @@ struct Opt {
     /// Eurostar API key
     #[structopt(short, long)]
     api_key: String,
+
+    /// How results should be sorted
+    #[structopt(long, possible_values = &SortBy::variants(), case_insensitive = true, default_value = "price")]
+    sort_by: SortBy,
 
     /// Start station
     #[structopt(parse(try_from_str = parse_station), default_value="London")]
