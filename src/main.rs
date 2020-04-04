@@ -9,7 +9,7 @@ use structopt::{clap, StructOpt};
 mod date;
 mod process;
 mod query;
-use process::get_journeys;
+use process::filter_journeys;
 use query::get_trains;
 
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
@@ -97,15 +97,25 @@ fn main() {
         debug!("Possible travel dates: {:#?}", travels);
     }
 
+    let mut journeys = Vec::new();
 
-    let trains = match get_trains(&opt.api_key, opt.from, opt.to, opt.since, opt.until) {
-        Ok(res) => res,
-        Err(err) => {
-            error!("{:?}", err);
-            std::process::exit(1);
-        }
-    };
-    let journeys = get_journeys(vec![trains], opt.price);
+    for (outbound_date, inbound_date) in travels.iter() {
+        let trains = match get_trains(
+            &opt.api_key,
+            opt.from,
+            opt.to,
+            *outbound_date,
+            *inbound_date,
+        ) {
+            Ok(res) => res,
+            Err(err) => {
+                error!("{:?}", err);
+                std::process::exit(1);
+            }
+        };
+        journeys.append(&mut filter_journeys(trains, opt.price));
+    }
+
     println!("{:#?}", journeys);
 }
 
