@@ -134,11 +134,16 @@ fn main() {
         println!("There was no journey matching supplied criteria :(")
     } else {
         info!("Found {} journeys matching criteria.", journeys.len());
-        format_results(journeys).printstd();
+        format_results(journeys, opt.sort_by).printstd();
     }
 }
 
-fn format_results(journeys: Vec<TrainJourney>) -> Table {
+fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {
+    match sort_by {
+        SortBy::Price => journeys.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()),
+        SortBy::Date => journeys.sort_by(|a, b| a.outbound.cmp(&b.outbound)),
+    }
+
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
     table.set_titles(row!["Outbound", "Inbound", "Price"]);
