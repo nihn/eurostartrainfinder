@@ -57,7 +57,7 @@ struct Opt {
 
     /// Max price per journey
     #[structopt(short, long)]
-    price: Option<f32>,
+    max_price: Option<f32>,
 
     /// Eurostar API key
     #[structopt(short, long)]
@@ -114,7 +114,7 @@ fn main() {
                 std::process::exit(1);
             }
         };
-        journeys.append(&mut filter_journeys(trains, opt.price));
+        journeys.append(&mut filter_journeys(trains, opt.max_price));
     }
 
     if journeys.is_empty() {
