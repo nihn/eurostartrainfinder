@@ -18,6 +18,7 @@ static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
     "Paris" => 8727100,
 };
+static RESULT_DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 arg_enum! {
     #[derive(Debug)]
@@ -154,7 +155,11 @@ fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {
     table.set_titles(row!["Outbound", "Inbound", "Price"]);
 
     for journey in journeys.iter() {
-        table.add_row(row![journey.outbound, journey.inbound, journey.price]);
+        table.add_row(row![
+            journey.outbound.format(RESULT_DATETIME_FORMAT),
+            journey.inbound.format(RESULT_DATETIME_FORMAT),
+            journey.price
+        ]);
     }
     table
 }
