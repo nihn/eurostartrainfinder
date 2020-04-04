@@ -116,7 +116,12 @@ fn main() {
         journeys.append(&mut filter_journeys(trains, opt.price));
     }
 
-    println!("{:#?}", journeys);
+    if journeys.is_empty() {
+        prinln!("There was no journey matching supplied criteria :(")
+    } else {
+        info!("Found {} journeys matching criteria.", journeys.len());
+        println!("{:#?}", journeys);
+    }
 }
 
 fn setup_logging(level: usize) {
