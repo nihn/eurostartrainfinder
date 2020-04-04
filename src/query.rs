@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use log::{debug, trace};
-use reqwest::blocking::{Client, Response};
 use reqwest::Error;
+use reqwest::{Client, Response};
 use serde::Deserialize;
 use serde_json;
 
@@ -52,7 +52,7 @@ struct ResponseJson {
     inbound: Option<InOrOut>,
 }
 
-pub fn get_trains(
+pub async fn get_trains(
     api_key: &str,
     from: i32,
     to: i32,
@@ -72,7 +72,7 @@ pub fn get_trains(
 
     debug!("Prepared request: {:?}", request);
 
-    let response = request.send().map_err(QueryError::ReqwestError)?;
+    let response = request.send().await.map_err(QueryError::ReqwestError)?;
 
     let status = response.status();
 
@@ -80,7 +80,7 @@ pub fn get_trains(
         return Err(QueryError::InternalError(format!(
             "Got {} response: {}",
             status,
-            response.text().unwrap_or("".to_string()),
+            response.text().await.unwrap_or("".to_string()),
         )));
     } else if status.is_server_error() {
         // TODO: Retry this
@@ -92,17 +92,17 @@ pub fn get_trains(
         debug!("Got {} response", status);
     }
 
-    let trains = parse_response(response, since, until);
+    let trains = parse_response(response, since, until).await;
 
     trains
 }
 
-fn parse_response(
+async fn parse_response(
     response: Response,
     out_date: NaiveDate,
     in_date: NaiveDate,
 ) -> Result<(Vec<Train>, Vec<Train>), QueryError> {
-    let text = response.text().map_err(QueryError::ReqwestError)?;
+    let text = response.text().await.map_err(QueryError::ReqwestError)?;
 
     let json: ResponseJson = match serde_json::from_str(&text) {
         Ok(res) => res,

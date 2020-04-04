@@ -2,17 +2,19 @@ extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Weekday};
 use clap::arg_enum;
+use futures::future;
 use log::{debug, error, info};
 use phf::phf_map;
 use prettytable::{cell, format, row, Table};
 use stderrlog;
 use structopt::{clap, StructOpt};
+use tokio;
 
 mod date;
 mod process;
 mod query;
 use process::{filter_journeys, TrainJourney};
-use query::get_trains;
+use query::{get_trains, QueryError};
 
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
@@ -90,7 +92,8 @@ struct Opt {
     to: i32,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let opt = Opt::from_args();
     setup_logging(opt.verbose);
 
@@ -116,25 +119,13 @@ fn main() {
         debug!("Possible travel dates: {:#?}", travels);
     }
 
-    let mut journeys = Vec::new();
-
-    for (outbound_date, inbound_date) in travels.iter() {
-        let trains = match get_trains(
-            &opt.api_key,
-            opt.from,
-            opt.to,
-            *outbound_date,
-            *inbound_date,
-            opt.adults,
-        ) {
-            Ok(res) => res,
-            Err(err) => {
-                error!("{:?}", err);
-                std::process::exit(1);
-            }
-        };
-        journeys.append(&mut filter_journeys(trains, opt.max_price));
-    }
+    let journeys = match get_journeys(&opt, &travels).await {
+        Ok(res) => res,
+        Err(err) => {
+            error!("{:?}", err);
+            std::process::exit(1);
+        }
+    };
 
     if journeys.is_empty() {
         println!("There was no journey matching supplied criteria :(")
@@ -142,6 +133,31 @@ fn main() {
         info!("Found {} journeys matching criteria.", journeys.len());
         format_results(journeys, opt.sort_by).printstd();
     }
+}
+
+async fn get_journeys(
+    opt: &Opt,
+    travels: &Vec<(NaiveDate, NaiveDate)>,
+) -> Result<Vec<TrainJourney>, QueryError> {
+    let mut trains = Vec::new();
+
+    for (outbound_date, inbound_date) in travels.iter() {
+        trains.push(get_trains(
+            &opt.api_key,
+            opt.from,
+            opt.to,
+            *outbound_date,
+            *inbound_date,
+            opt.adults,
+        ));
+    }
+
+    let mut journeys = Vec::new();
+
+    for trains in future::join_all(trains).await {
+        journeys.append(&mut filter_journeys(&trains?, opt.max_price));
+    }
+    Ok(journeys)
 }
 
 fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {

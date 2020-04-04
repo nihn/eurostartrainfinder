@@ -10,7 +10,7 @@ pub struct TrainJourney {
 }
 
 pub fn filter_journeys(
-    trains: (Vec<Train>, Vec<Train>),
+    trains: &(Vec<Train>, Vec<Train>),
     max_price: Option<f32>,
 ) -> Vec<TrainJourney> {
     let mut res = Vec::new();
