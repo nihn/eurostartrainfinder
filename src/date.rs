@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, Duration, NaiveDate, NaiveTime, Utc, Weekday};
 use std::fmt;
 use std::num::ParseIntError;
 
@@ -82,6 +82,10 @@ pub fn parse_date_from_str(date: &str) -> Result<NaiveDate, ParseError> {
     Ok(parsed)
 }
 
+pub fn parse_hour_from_str(time: &str) -> Result<NaiveTime, ParseError> {
+    NaiveTime::parse_from_str(time, TIME_FORMAT).map_err(ParseError::ChronoError)
+}
+
 pub fn parse_weekday_from_str(weekday: &str) -> Result<Weekday, ParseError> {
     match weekday.to_lowercase().as_str() {
         "monday" => Ok(Weekday::Mon),
@@ -136,11 +140,8 @@ pub fn get_possible_travel_dates(
 
 #[cfg(test)]
 mod tests {
-    use crate::date::{
-        get_possible_travel_dates, parse_date_from_str, parse_duration_from_str,
-        parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS,
-    };
-    use chrono::{Duration, NaiveDate, Utc, Weekday};
+    use crate::date::{get_possible_travel_dates, parse_date_from_str, parse_duration_from_str, parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS, parse_hour_from_str};
+    use chrono::{Duration, NaiveDate, Utc, Weekday, NaiveTime};
 
     #[test]
     fn test_duration_from_str() {
@@ -202,6 +203,24 @@ mod tests {
             Err(ParseError::ChronoError(_)) => Ok(()),
             _ => Err("Should fail with ParseError::ChronoError".to_string()),
         }
+    }
+
+    #[test]
+    fn test_parse_hour() {
+        assert_eq!(
+            parse_hour_from_str("20:00").unwrap(),
+            NaiveTime::from_hms(20, 0, 0),
+        );
+
+        assert_eq!(
+            parse_hour_from_str("8:00").unwrap(),
+            NaiveTime::from_hms(8, 0, 0),
+        );
+
+        assert_eq!(
+            parse_hour_from_str("08:00").unwrap(),
+            NaiveTime::from_hms(8, 0, 0),
+        );
     }
 
     #[test]

@@ -1,6 +1,6 @@
 extern crate structopt;
 
-use chrono::{Duration, NaiveDate, Weekday};
+use chrono::{Duration, NaiveDate, NaiveTime, Weekday};
 use clap::arg_enum;
 use log::{debug, error, info};
 use phf::phf_map;
@@ -49,11 +49,11 @@ struct Opt {
     verbose: usize,
 
     /// Since what date we should look
-    #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::NOW)]
+    #[structopt(short, long, value_name = "YYYY-MM-DD", parse(try_from_str = date::parse_date_from_str), default_value=date::NOW)]
     since: NaiveDate,
 
     /// To what date we should look
-    #[structopt(short, long, parse(try_from_str = date::parse_date_from_str), default_value=date::PLUS_TWO_WEEKS)]
+    #[structopt(short, long, value_name = "YYYY-MM-DD", parse(try_from_str = date::parse_date_from_str), default_value=date::PLUS_TWO_WEEKS)]
     until: NaiveDate,
 
     /// Number of days to stay (e.g. Friday - Sunday would be 3 days)
@@ -63,6 +63,22 @@ struct Opt {
     /// Which days of the week should be considered as a start of a journey
     #[structopt(short, long, parse(try_from_str = date::parse_weekday_from_str))]
     weekday: Option<Weekday>,
+
+    /// Only consider outbound trains departing after this time
+    #[structopt(long, value_name = "HH:MM", parse(try_from_str = date::parse_hour_from_str))]
+    out_departure_after: Option<NaiveTime>,
+
+    /// Only consider outbound trains departing before this time
+    #[structopt(long, value_name = "HH:MM", parse(try_from_str = date::parse_hour_from_str))]
+    out_departure_before: Option<NaiveTime>,
+
+    /// Only consider inbound trains departing after this time
+    #[structopt(long, value_name = "HH:MM", parse(try_from_str = date::parse_hour_from_str))]
+    in_departure_after: Option<NaiveTime>,
+
+    /// Only consider inbound trains departing before this time
+    #[structopt(long, value_name = "HH:MM", parse(try_from_str = date::parse_hour_from_str))]
+    in_departure_before: Option<NaiveTime>,
 
     /// Max price per journey
     #[structopt(short, long)]
@@ -93,6 +109,8 @@ struct Opt {
 async fn main() {
     let opt = Opt::from_args();
     setup_logging(opt.verbose);
+
+    debug!("Parsed opts: {:#?}", opt);
 
     if opt.from == opt.to {
         clap::Error::value_validation_auto(
