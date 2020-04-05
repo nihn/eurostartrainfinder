@@ -140,8 +140,11 @@ pub fn get_possible_travel_dates(
 
 #[cfg(test)]
 mod tests {
-    use crate::date::{get_possible_travel_dates, parse_date_from_str, parse_duration_from_str, parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS, parse_hour_from_str};
-    use chrono::{Duration, NaiveDate, Utc, Weekday, NaiveTime};
+    use crate::date::{
+        get_possible_travel_dates, parse_date_from_str, parse_duration_from_str,
+        parse_hour_from_str, parse_weekday_from_str, ParseError, NOW, PLUS_TWO_WEEKS,
+    };
+    use chrono::{Duration, NaiveDate, NaiveTime, Utc, Weekday};
 
     #[test]
     fn test_duration_from_str() {

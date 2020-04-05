@@ -30,6 +30,26 @@ pub enum QueryError {
     InternalError(String),
 }
 
+pub struct Filter {
+    pub max_price: Option<f32>,
+    pub out_departure_after: Option<NaiveTime>,
+    pub out_departure_before: Option<NaiveTime>,
+    pub in_departure_after: Option<NaiveTime>,
+    pub in_departure_before: Option<NaiveTime>,
+}
+
+impl Filter {
+    pub fn new() -> Filter {
+        Filter {
+            max_price: None,
+            out_departure_after: None,
+            out_departure_before: None,
+            in_departure_before: None,
+            in_departure_after: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Train {
     departure: NaiveDateTime,
@@ -68,15 +88,32 @@ struct ResponseJson {
     inbound: Option<InOrOut>,
 }
 
-fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), max_price: Option<f32>) -> Vec<TrainJourney> {
+fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), filter: &Filter) -> Vec<TrainJourney> {
     let mut res = Vec::new();
 
     for out_t in trains.0.iter() {
         for in_t in trains.1.iter() {
             let total_price = out_t.price + in_t.price;
-            if max_price.is_some() && total_price > max_price.unwrap() {
+            if filter.max_price.is_some() && total_price > filter.max_price.unwrap() {
+                continue;
+            } else if filter.out_departure_after.is_some()
+                && out_t.departure.time() <= filter.out_departure_after.unwrap()
+            {
+                continue;
+            } else if filter.out_departure_before.is_some()
+                && out_t.departure.time() >= filter.out_departure_before.unwrap()
+            {
+                continue;
+            } else if filter.in_departure_after.is_some()
+                && in_t.departure.time() <= filter.in_departure_after.unwrap()
+            {
+                continue;
+            } else if filter.in_departure_before.is_some()
+                && in_t.departure.time() >= filter.in_departure_before.unwrap()
+            {
                 continue;
             }
+
             res.push(TrainJourney {
                 outbound: out_t.departure,
                 inbound: in_t.departure,
@@ -95,7 +132,7 @@ pub async fn get_journeys(
     from: i32,
     to: i32,
     adults: i16,
-    max_price: Option<f32>,
+    filter: &Filter,
 ) -> Result<Vec<TrainJourney>, QueryError> {
     let client = Client::new();
     let mut all_trains = Vec::new();
@@ -115,7 +152,7 @@ pub async fn get_journeys(
     let mut journeys = Vec::new();
 
     for trains in future::join_all(all_trains).await {
-        journeys.append(&mut filter_journeys(&trains?, max_price));
+        journeys.append(&mut filter_journeys(&trains?, filter));
     }
     Ok(journeys)
 }
@@ -226,7 +263,7 @@ fn format_date(date: NaiveDate) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::trains::{get_journeys, QueryError, TrainJourney};
+    use crate::trains::{get_journeys, Filter, QueryError, TrainJourney};
     use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
     use mockito::{mock, Mock};
 
@@ -255,15 +292,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_journeys_ok() {
+    async fn test_get_journeys_filtered_by_max_price() {
         let (dates, mut mock) = create_mock();
         mock = mock
             .with_status(200)
             .with_body(include_str!("test_resources/response.json"))
             .create();
+        let ref mut filter1 = Filter::new();
+        filter1.max_price = Some(100.0);
 
         // Max price set
-        let journeys = get_journeys(&dates, API_KEY, FROM, TO, 2, Some(100.0))
+        let journeys = get_journeys(&dates, API_KEY, FROM, TO, 2, filter1)
             .await
             .unwrap();
 
@@ -277,11 +316,19 @@ mod tests {
                 in_duration: Duration::minutes(149),
             }]
         );
+    }
 
-        mock.create();
+    #[tokio::test]
+    async fn test_get_journeys_no_filters() {
+        let (dates, mut mock) = create_mock();
+        mock = mock
+            .with_status(200)
+            .with_body(include_str!("test_resources/response.json"))
+            .create();
+        let ref filter = Filter::new();
 
         // Max price not set
-        let journeys = get_journeys(&dates, "api-key", 123, 321, 2, None)
+        let journeys = get_journeys(&dates, API_KEY, 123, 321, 2, filter)
             .await
             .unwrap();
 
@@ -296,22 +343,133 @@ mod tests {
                     in_duration: Duration::minutes(149),
                 },
                 TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(5, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 33, 0)),
+                    price: 128.5,
+                    out_duration: Duration::minutes(157),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(5, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 53, 0)),
+                    price: 128.5,
+                    out_duration: Duration::minutes(157),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
                     outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(6, 40, 0)),
                     inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
                     price: 108.5,
                     out_duration: Duration::minutes(133),
                     in_duration: Duration::minutes(149),
-                }
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(6, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 33, 0)),
+                    price: 158.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(6, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 53, 0)),
+                    price: 158.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(7, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
+                    price: 128.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(7, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 33, 0)),
+                    price: 178.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
+                },
+                TrainJourney {
+                    outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(7, 40, 0)),
+                    inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 53, 0)),
+                    price: 178.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
+                },
             ]
         );
     }
 
     #[tokio::test]
+    async fn test_get_journeys_filtered_by_time() {
+        let (dates, mut mock) = create_mock();
+        mock = mock
+            .with_status(200)
+            .with_body(include_str!("test_resources/response.json"))
+            .create();
+        let ref mut filter = Filter::new();
+        filter.out_departure_after = Some(NaiveTime::from_hms(6, 0, 0));
+        filter.out_departure_before = Some(NaiveTime::from_hms(7, 0, 0));
+        filter.in_departure_after = Some(NaiveTime::from_hms(8, 0, 0));
+        filter.in_departure_before = Some(NaiveTime::from_hms(8, 52, 0));
+
+        // Departure after set
+        let journeys = get_journeys(&dates, API_KEY, 123, 321, 2, filter)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            journeys,
+            vec![TrainJourney {
+                outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(6, 40, 0)),
+                inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(8, 33, 0)),
+                price: 158.5,
+                out_duration: Duration::minutes(133),
+                in_duration: Duration::minutes(149),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_journeys_all_filters() {
+        let (dates, mut mock) = create_mock();
+        mock = mock
+            .with_status(200)
+            .with_body(include_str!("test_resources/response.json"))
+            .create();
+        let ref filter = Filter {
+            max_price: Some(100.0),
+            out_departure_after: Some(NaiveTime::from_hms(5, 0, 0)),
+            out_departure_before: Some(NaiveTime::from_hms(7, 0, 0)),
+            in_departure_after: Some(NaiveTime::from_hms(6, 0, 0)),
+            in_departure_before: Some(NaiveTime::from_hms(8, 30, 0)),
+        };
+
+        // Departure after set
+        let journeys = get_journeys(&dates, API_KEY, 123, 321, 2, filter)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            journeys,
+            vec![TrainJourney {
+                outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(5, 40, 0)),
+                inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
+                price: 78.5,
+                out_duration: Duration::minutes(157),
+                in_duration: Duration::minutes(149),
+            }]
+        );
+    }
+    #[tokio::test]
     async fn test_empty_response() {
         let (dates, mock) = create_mock();
         let _mock = mock.with_status(200).with_body("{}").create();
+        let ref filter = Filter::new();
 
-        let journeys = get_journeys(&dates, "api-key", 123, 321, 2, None)
+        let journeys = get_journeys(&dates, API_KEY, 123, 321, 2, filter)
             .await
             .unwrap();
 
@@ -322,8 +480,9 @@ mod tests {
     async fn test_get_journeys_500_response() {
         let (dates, mock) = create_mock();
         let _mock = mock.with_status(500).with_body("server crashed").create();
+        let ref filter = Filter::new();
 
-        match get_journeys(&dates, API_KEY, FROM, TO, 2, Some(100.0)).await {
+        match get_journeys(&dates, API_KEY, FROM, TO, 2, filter).await {
             Err(QueryError::ServerError(err)) => assert_eq!(
                 err,
                 "Got 500 Internal Server Error response: server crashed"
@@ -339,8 +498,9 @@ mod tests {
     async fn test_get_journeys_400_response() {
         let (dates, mock) = create_mock();
         let _mock = mock.with_status(404).with_body("never existed").create();
+        let ref filter = Filter::new();
 
-        match get_journeys(&dates, API_KEY, FROM, TO, 2, Some(100.0)).await {
+        match get_journeys(&dates, API_KEY, FROM, TO, 2, filter).await {
             Err(QueryError::InternalError(err)) => {
                 assert_eq!(err, "Got 404 Not Found response: never existed")
             }
@@ -355,8 +515,9 @@ mod tests {
     async fn test_get_journeys_invalid_json() {
         let (dates, mock) = create_mock();
         let _mock = mock.with_status(200).with_body("not a json").create();
+        let ref filter = Filter::new();
 
-        match get_journeys(&dates, API_KEY, FROM, TO, 2, Some(100.0)).await {
+        match get_journeys(&dates, API_KEY, FROM, TO, 2, filter).await {
             Err(QueryError::JsonParseError(err)) => assert_eq!(
                 err,
                 "Error while parsing JSON: Error(\"expected ident\", line: 1, column: 2)"

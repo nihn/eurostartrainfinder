@@ -39,7 +39,7 @@
          {
             "id":"9081",
             "departureTime":"06:40",
-            "arrivalTime":"10:17",
+            "arrivalTime":"11:17",
             "duration":133,
             "direct":true,
             "dobRequired":false,
@@ -50,6 +50,24 @@
                   "remaining":50,
                   "price":{
                      "adult":59
+                  }
+               }
+            ]
+         },
+         {
+            "id":"9082",
+            "departureTime":"07:40",
+            "arrivalTime":"12:17",
+            "duration":133,
+            "direct":true,
+            "dobRequired":false,
+            "lsofUnaccompaniedMinors":false,
+            "requiresCustomsChecks":false,
+            "class":[
+               {
+                  "remaining":50,
+                  "price":{
+                     "adult":79
                   }
                }
             ]
@@ -89,6 +107,36 @@
                {
                   "isNotAvailable":true,
                   "remaining":0
+               }
+            ]
+         },
+         {
+            "id":"9006",
+            "departureTime":"08:33",
+            "arrivalTime":"09:02",
+            "duration":149,
+            "direct":true,
+            "class":[
+               {
+                  "remaining":31,
+                  "price":{
+                     "adult":99.5
+                  }
+               }
+            ]
+         },
+         {
+            "id":"9007",
+            "departureTime":"08:53",
+            "arrivalTime":"09:22",
+            "duration":149,
+            "direct":true,
+            "class":[
+               {
+                  "remaining":31,
+                  "price":{
+                     "adult":99.5
+                  }
                }
             ]
          }

@@ -11,7 +11,7 @@ use tokio;
 
 mod date;
 mod trains;
-use trains::{get_journeys, TrainJourney};
+use trains::{get_journeys, Filter, TrainJourney};
 
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
@@ -134,13 +134,21 @@ async fn main() {
         debug!("Possible travel dates: {:#?}", travels);
     }
 
+    let filter = Filter {
+        max_price: opt.max_price,
+        out_departure_before: opt.out_departure_before,
+        out_departure_after: opt.out_departure_after,
+        in_departure_before: opt.in_departure_before,
+        in_departure_after: opt.in_departure_after,
+    };
+
     let journeys = match get_journeys(
         &travels,
         &opt.api_key,
         opt.from,
         opt.to,
         opt.adults,
-        opt.max_price,
+        &filter,
     )
     .await
     {
