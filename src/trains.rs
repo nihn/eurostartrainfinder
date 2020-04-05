@@ -1,8 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use futures::future;
 use log::{debug, trace};
-use reqwest::Error;
-use reqwest::{Client, Response};
+use reqwest::{Client, Error, Response};
 use serde::Deserialize;
 use serde_json;
 
@@ -87,10 +86,12 @@ pub async fn get_journeys(
     adults: i16,
     max_price: Option<f32>,
 ) -> Result<Vec<TrainJourney>, QueryError> {
-    let mut trains = Vec::new();
+    let client = Client::new();
+    let mut all_trains = Vec::new();
 
     for (outbound_date, inbound_date) in travels.iter() {
-        trains.push(get_trains(
+        all_trains.push(get_trains(
+            &client,
             api_key,
             from,
             to,
@@ -102,13 +103,14 @@ pub async fn get_journeys(
 
     let mut journeys = Vec::new();
 
-    for trains in future::join_all(trains).await {
+    for trains in future::join_all(all_trains).await {
         journeys.append(&mut filter_journeys(&trains?, max_price));
     }
     Ok(journeys)
 }
 
 async fn get_trains(
+    client: &Client,
     api_key: &str,
     from: i32,
     to: i32,
@@ -116,7 +118,6 @@ async fn get_trains(
     until: NaiveDate,
     adults: i16,
 ) -> Result<(Vec<Train>, Vec<Train>), QueryError> {
-    let client = Client::new();
     let request = client
         .get(&format!("{}/{}/{}", EUROSTAR_URL, from, to))
         .query(&[
