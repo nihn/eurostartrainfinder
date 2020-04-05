@@ -1,15 +1,22 @@
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use futures::future;
 use log::{debug, trace};
 use reqwest::Error;
 use reqwest::{Client, Response};
 use serde::Deserialize;
 use serde_json;
-use futures::future;
 
 use crate::date;
 
 static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en";
 static API_KEY_HEADER: &str = "x-apikey";
+
+#[derive(Debug)]
+pub struct TrainJourney {
+    pub outbound: NaiveDateTime,
+    pub inbound: NaiveDateTime,
+    pub price: f32,
+}
 
 #[derive(Debug)]
 pub enum QueryError {
@@ -19,9 +26,9 @@ pub enum QueryError {
 }
 
 #[derive(Debug)]
-pub struct Train {
-    pub departure: NaiveDateTime,
-    pub price: f32,
+struct Train {
+    departure: NaiveDateTime,
+    price: f32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -51,13 +58,6 @@ struct InOrOut {
 struct ResponseJson {
     outbound: Option<InOrOut>,
     inbound: Option<InOrOut>,
-}
-
-#[derive(Debug)]
-pub struct TrainJourney {
-    pub outbound: NaiveDateTime,
-    pub inbound: NaiveDateTime,
-    pub price: f32,
 }
 
 fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), max_price: Option<f32>) -> Vec<TrainJourney> {
@@ -108,7 +108,7 @@ pub async fn get_journeys(
     Ok(journeys)
 }
 
-pub async fn get_trains(
+async fn get_trains(
     api_key: &str,
     from: i32,
     to: i32,
