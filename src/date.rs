@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_duration_from_str() {
-        assert_eq!(parse_duration_from_str("3").unwrap(), Duration::days(3),)
+        assert_eq!(parse_duration_from_str("3").unwrap(), Duration::days(2),)
     }
 
     #[test]
