@@ -1,5 +1,4 @@
-use chrono::{Datelike, Duration, NaiveDate, NaiveTime, Utc, Weekday};
-use serde::{self, Deserialize, Deserializer};
+use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
 use std::fmt;
 use std::num::ParseIntError;
 
@@ -25,12 +24,31 @@ impl fmt::Display for ParseError {
     }
 }
 
-pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    NaiveTime::parse_from_str(&s, TIME_FORMAT).map_err(serde::de::Error::custom)
+pub mod naive_time {
+    use super::TIME_FORMAT;
+    use chrono::NaiveTime;
+    use serde::{self, Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveTime, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        NaiveTime::parse_from_str(&s, TIME_FORMAT).map_err(serde::de::Error::custom)
+    }
+}
+
+pub mod duration {
+    use chrono::Duration;
+    use serde::{self, Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let minutes = i64::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+        Ok(Duration::minutes(minutes))
+    }
 }
 
 pub fn parse_duration_from_str(days: &str) -> Result<Duration, ParseError> {

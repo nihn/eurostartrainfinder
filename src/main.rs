@@ -142,6 +142,9 @@ async fn main() {
 }
 
 fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {
+    // Always pre-sort on price
+    // journeys.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap());
+
     match sort_by {
         SortBy::Price => journeys.sort_by(|a, b| a.price.partial_cmp(&b.price).unwrap()),
         SortBy::Date => journeys.sort_by(|a, b| a.outbound.cmp(&b.outbound)),
@@ -149,12 +152,22 @@ fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {
 
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-    table.set_titles(row!["Outbound", "Inbound", "Price"]);
+    table.set_titles(row!["Outbound (duration)", "Inbound (duration)", "Price"]);
 
     for journey in journeys.iter() {
         table.add_row(row![
-            journey.outbound.format(RESULT_DATETIME_FORMAT),
-            journey.inbound.format(RESULT_DATETIME_FORMAT),
+            format!(
+                "{} ({}h{}m)",
+                journey.outbound.format(RESULT_DATETIME_FORMAT),
+                journey.out_duration.num_hours(),
+                journey.out_duration.num_minutes() % 60
+            ),
+            format!(
+                "{} ({}h{}m)",
+                journey.inbound.format(RESULT_DATETIME_FORMAT),
+                journey.in_duration.num_hours(),
+                journey.out_duration.num_minutes() % 60
+            ),
             journey.price
         ]);
     }

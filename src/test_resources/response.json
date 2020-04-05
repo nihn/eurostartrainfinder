@@ -40,7 +40,7 @@
             "id":"9081",
             "departureTime":"06:40",
             "arrivalTime":"10:17",
-            "duration":157,
+            "duration":133,
             "direct":true,
             "dobRequired":false,
             "lsofUnaccompaniedMinors":false,

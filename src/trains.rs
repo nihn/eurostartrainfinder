@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use futures::future;
 use log::{debug, trace, warn};
 use reqwest::{Client, Error, Response};
@@ -18,6 +18,8 @@ pub struct TrainJourney {
     pub outbound: NaiveDateTime,
     pub inbound: NaiveDateTime,
     pub price: f32,
+    pub out_duration: Duration,
+    pub in_duration: Duration,
 }
 
 #[derive(Debug)]
@@ -31,6 +33,7 @@ pub enum QueryError {
 #[derive(Debug)]
 struct Train {
     departure: NaiveDateTime,
+    duration: Duration,
     price: f32,
 }
 
@@ -47,8 +50,10 @@ struct Class {
 
 #[derive(Deserialize, Debug)]
 struct Journey {
-    #[serde(with = "date", rename = "departureTime")]
+    #[serde(with = "date::naive_time", rename = "departureTime")]
     departure_time: NaiveTime,
+    #[serde(with = "date::duration")]
+    duration: Duration,
     class: Vec<Class>,
 }
 
@@ -76,6 +81,8 @@ fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), max_price: Option<f32>) ->
                 outbound: out_t.departure,
                 inbound: in_t.departure,
                 price: total_price,
+                out_duration: out_t.duration,
+                in_duration: in_t.duration,
             })
         }
     }
@@ -204,6 +211,7 @@ fn get_trains_from_res(in_or_out: Option<InOrOut>, date: NaiveDate) -> Vec<Train
                 results.push(Train {
                     price: val.adult,
                     departure: NaiveDateTime::new(date, train.departure_time),
+                    duration: train.duration,
                 });
             }
             None => trace!("No value found for price in {:#?}", train),
@@ -211,6 +219,7 @@ fn get_trains_from_res(in_or_out: Option<InOrOut>, date: NaiveDate) -> Vec<Train
     }
     results
 }
+
 fn format_date(date: NaiveDate) -> String {
     date.format("%Y-%m-%d").to_string()
 }
@@ -218,7 +227,7 @@ fn format_date(date: NaiveDate) -> String {
 #[cfg(test)]
 mod tests {
     use crate::trains::{get_journeys, QueryError, TrainJourney};
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
     use mockito::{mock, Mock};
 
     static API_KEY: &str = "api-key";
@@ -264,6 +273,8 @@ mod tests {
                 outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(5, 40, 0)),
                 inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
                 price: 78.5,
+                out_duration: Duration::minutes(157),
+                in_duration: Duration::minutes(149),
             }]
         );
 
@@ -281,11 +292,15 @@ mod tests {
                     outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(5, 40, 0)),
                     inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
                     price: 78.5,
+                    out_duration: Duration::minutes(157),
+                    in_duration: Duration::minutes(149),
                 },
                 TrainJourney {
                     outbound: NaiveDateTime::new(dates[0].0, NaiveTime::from_hms(6, 40, 0)),
                     inbound: NaiveDateTime::new(dates[0].1, NaiveTime::from_hms(6, 33, 0)),
                     price: 108.5,
+                    out_duration: Duration::minutes(133),
+                    in_duration: Duration::minutes(149),
                 }
             ]
         );
