@@ -2,7 +2,6 @@ extern crate structopt;
 
 use chrono::{Duration, NaiveDate, Weekday};
 use clap::arg_enum;
-use futures::future;
 use log::{debug, error, info};
 use phf::phf_map;
 use prettytable::{cell, format, row, Table};
@@ -11,10 +10,8 @@ use structopt::{clap, StructOpt};
 use tokio;
 
 mod date;
-mod process;
-mod query;
-use process::{filter_journeys, TrainJourney};
-use query::{get_trains, QueryError};
+mod trains;
+use trains::{get_journeys, TrainJourney};
 
 static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
     "London" => 7015400,
@@ -119,7 +116,16 @@ async fn main() {
         debug!("Possible travel dates: {:#?}", travels);
     }
 
-    let journeys = match get_journeys(&opt, &travels).await {
+    let journeys = match get_journeys(
+        &travels,
+        &opt.api_key,
+        opt.from,
+        opt.to,
+        opt.adults,
+        opt.max_price,
+    )
+    .await
+    {
         Ok(res) => res,
         Err(err) => {
             error!("{:?}", err);
@@ -133,31 +139,6 @@ async fn main() {
         info!("Found {} journeys matching criteria.", journeys.len());
         format_results(journeys, opt.sort_by).printstd();
     }
-}
-
-async fn get_journeys(
-    opt: &Opt,
-    travels: &Vec<(NaiveDate, NaiveDate)>,
-) -> Result<Vec<TrainJourney>, QueryError> {
-    let mut trains = Vec::new();
-
-    for (outbound_date, inbound_date) in travels.iter() {
-        trains.push(get_trains(
-            &opt.api_key,
-            opt.from,
-            opt.to,
-            *outbound_date,
-            *inbound_date,
-            opt.adults,
-        ));
-    }
-
-    let mut journeys = Vec::new();
-
-    for trains in future::join_all(trains).await {
-        journeys.append(&mut filter_journeys(&trains?, opt.max_price));
-    }
-    Ok(journeys)
 }
 
 fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {

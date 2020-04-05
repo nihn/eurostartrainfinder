@@ -4,6 +4,7 @@ use reqwest::Error;
 use reqwest::{Client, Response};
 use serde::Deserialize;
 use serde_json;
+use futures::future;
 
 use crate::date;
 
@@ -50,6 +51,61 @@ struct InOrOut {
 struct ResponseJson {
     outbound: Option<InOrOut>,
     inbound: Option<InOrOut>,
+}
+
+#[derive(Debug)]
+pub struct TrainJourney {
+    pub outbound: NaiveDateTime,
+    pub inbound: NaiveDateTime,
+    pub price: f32,
+}
+
+fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), max_price: Option<f32>) -> Vec<TrainJourney> {
+    let mut res = Vec::new();
+
+    for out_t in trains.0.iter() {
+        for in_t in trains.1.iter() {
+            let total_price = out_t.price + in_t.price;
+            if max_price.is_some() && total_price > max_price.unwrap() {
+                continue;
+            }
+            res.push(TrainJourney {
+                outbound: out_t.departure,
+                inbound: in_t.departure,
+                price: total_price,
+            })
+        }
+    }
+    res
+}
+
+pub async fn get_journeys(
+    travels: &Vec<(NaiveDate, NaiveDate)>,
+    api_key: &str,
+    from: i32,
+    to: i32,
+    adults: i16,
+    max_price: Option<f32>,
+) -> Result<Vec<TrainJourney>, QueryError> {
+    let mut trains = Vec::new();
+
+    for (outbound_date, inbound_date) in travels.iter() {
+        trains.push(get_trains(
+            api_key,
+            from,
+            to,
+            *outbound_date,
+            *inbound_date,
+            adults,
+        ));
+    }
+
+    let mut journeys = Vec::new();
+
+    for trains in future::join_all(trains).await {
+        journeys.append(&mut filter_journeys(&trains?, max_price));
+    }
+    Ok(journeys)
 }
 
 pub async fn get_trains(
