@@ -37,7 +37,7 @@ ARGS:
 
 Example output:
 ```
-mateuszm@mateuszm-mbp eurostarchecker % ./target/debug/eurostarchecker --api-key 0aa3d4b7e805493c8e310cfb871c4344 London Paris --until 2020-06-30 --days 3 --max-price 100 --weekday Friday  --out-departure-after 18:00 --in-departure-after 18:00 --in-departure-before 21:00
+mateuszm@mateuszm-mbp eurostarchecker % ./target/debug/eurostarchecker --api-key $API_KEY London Paris --until 2020-06-30 --days 3 --max-price 100 --weekday Friday  --out-departure-after 18:00 --in-departure-after 18:00 --in-departure-before 21:00
 +--------------------------+--------------------------+-------+
 | Outbound (duration)      | Inbound (duration)       | Price |
 +--------------------------+--------------------------+-------+
