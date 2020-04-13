@@ -1,8 +1,8 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use futures::future;
-use log::{debug, trace, warn};
+use log::{debug, error, trace, warn};
 use maplit::hashmap;
-use reqwest::{Client, Error, Response};
+use reqwest::{Client, Error, Response, StatusCode};
 use serde::Deserialize;
 use serde_json;
 use std::collections::HashMap;
@@ -30,7 +30,6 @@ pub struct TrainJourney {
 pub enum QueryError {
     ReqwestError(Error),
     JsonParseError(String),
-    ServerError(String),
     InternalError(String),
 }
 
@@ -134,7 +133,15 @@ fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), filter: &Filter) -> Vec<Tr
 
 pub async fn get_stations_map(api_key: &str) -> Result<HashMap<String, i32>, QueryError> {
     let client = Client::new();
-    let response = do_request(&client, STATIONS_LOCATION, api_key, hashmap! {}).await?;
+    let response = match do_request(&client, STATIONS_LOCATION, api_key, hashmap! {}).await? {
+        Some(res) => res,
+        None => {
+            return Err(QueryError::InternalError(
+                "Server returned empty Station Name to Station ID".into(),
+            ))
+        }
+    };
+
     let text = response.text().await.map_err(QueryError::ReqwestError)?;
 
     let json: StationsResponseJson = match serde_json::from_str(&text) {
@@ -226,7 +233,7 @@ async fn do_request(
     location: &str,
     api_key: &str,
     query_params: HashMap<&str, String>,
-) -> Result<Response, QueryError> {
+) -> Result<Option<Response>, QueryError> {
     #[cfg(test)]
     let url = &mockito::server_url();
     #[cfg(not(test))]
@@ -243,31 +250,43 @@ async fn do_request(
 
     let status = response.status();
 
+    if status == StatusCode::UNPROCESSABLE_ENTITY {
+        return Ok(None);
+    }
+
     if status.is_client_error() {
         return Err(QueryError::InternalError(format!(
-            "Got {} response: {}",
+            "Got {} response for {}: {}",
             status,
+            response.url().to_string(),
             response.text().await.unwrap_or("".to_string()),
         )));
     } else if status.is_server_error() {
-        // TODO: Retry this
-        return Err(QueryError::ServerError(format!(
-            "Got {} response: {}",
+        error!(
+            "Got {} response for {}: {}",
             status,
+            response.url().to_string(),
             response.text().await.unwrap_or("".to_string()),
-        )));
+        );
+        return Ok(None);
     } else {
-        debug!("Got {} response", status);
+        debug!("Got {} response for {}", status, response.url().to_string());
     }
-    Ok(response)
+    Ok(Some(response))
 }
 
 async fn parse_response(
-    response: Response,
+    response: Option<Response>,
     out_date: NaiveDate,
     in_date: NaiveDate,
 ) -> Result<(Vec<Train>, Vec<Train>), QueryError> {
-    let text = response.text().await.map_err(QueryError::ReqwestError)?;
+    let text = match response {
+        Some(res) => res.text().await.map_err(QueryError::ReqwestError)?,
+        None => {
+            warn!("No trains found for {} and {} date pair", out_date, in_date);
+            return Ok((Vec::new(), Vec::new()));
+        }
+    };
 
     let json: ResponseJson = match serde_json::from_str(&text) {
         Ok(res) => res,
@@ -546,27 +565,40 @@ mod tests {
         let _mock = mock.with_status(500).with_body("server crashed").create();
         let ref filter = Filter::new();
 
-        match get_journeys(&dates, API_KEY, FROM, TO, 2, filter).await {
-            Err(QueryError::ServerError(err)) => assert_eq!(
-                err,
-                "Got 500 Internal Server Error response: server crashed"
-            ),
-            default => panic!(
-                "get_journeys return {:?}, it should return QueryError::ServerError!",
-                default
-            ),
-        }
+        assert_eq!(
+            Vec::<TrainJourney>::new(),
+            get_journeys(&dates, API_KEY, FROM, TO, 2, filter)
+                .await
+                .unwrap(),
+        )
     }
 
     #[tokio::test]
-    async fn test_get_journeys_400_response() {
+    async fn test_get_journeys_422_response() {
+        let (dates, mock) = create_mock();
+        let _mock = mock
+            .with_status(422)
+            .with_body("no entities found")
+            .create();
+        let ref filter = Filter::new();
+
+        assert_eq!(
+            Vec::<TrainJourney>::new(),
+            get_journeys(&dates, API_KEY, FROM, TO, 2, filter)
+                .await
+                .unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn test_get_journeys_404_response() {
         let (dates, mock) = create_mock();
         let _mock = mock.with_status(404).with_body("never existed").create();
         let ref filter = Filter::new();
 
         match get_journeys(&dates, API_KEY, FROM, TO, 2, filter).await {
             Err(QueryError::InternalError(err)) => {
-                assert_eq!(err, "Got 404 Not Found response: never existed")
+                assert!(err.starts_with("Got 404 Not Found"));
             }
             default => panic!(
                 "get_journeys return {:?}, it should return QueryError::InternalError!",
@@ -618,7 +650,7 @@ mod tests {
             .create();
 
         match get_stations_map(API_KEY).await {
-            Err(QueryError::JsonParseError(err)) => Ok(()),
+            Err(QueryError::JsonParseError(_)) => Ok(()),
             default => Err(format!(
                 "get_stations_map returned: {:?} should return JsonParseError!",
                 default
@@ -635,7 +667,7 @@ mod tests {
             .create();
 
         match get_stations_map(API_KEY).await {
-            Err(QueryError::InternalError(err)) => Ok(()),
+            Err(QueryError::InternalError(_)) => Ok(()),
             default => Err(format!(
                 "get_stations_map returned: {:?} should return InternalError!",
                 default
