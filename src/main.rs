@@ -3,20 +3,15 @@ extern crate structopt;
 use chrono::{Duration, NaiveDate, NaiveTime, Weekday};
 use clap::arg_enum;
 use log::{debug, error, info};
-use phf::phf_map;
 use prettytable::{cell, format, row, Table};
+use std::collections::HashMap;
 use stderrlog;
 use structopt::{clap, StructOpt};
 use tokio;
-
 mod date;
 mod trains;
-use trains::{get_journeys, Filter, TrainJourney};
+use trains::{get_journeys, get_stations_map, Filter, TrainJourney};
 
-static STATION_TO_ID: phf::Map<&str, i32> = phf_map! {
-    "London" => 7015400,
-    "Paris" => 8727100,
-};
 static RESULT_DATETIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
 arg_enum! {
@@ -24,20 +19,6 @@ arg_enum! {
     enum SortBy {
         Price,
         Date,
-    }
-}
-
-fn parse_station(station: &str) -> Result<i32, String> {
-    match STATION_TO_ID.get(station) {
-        Some(res) => Ok(*res),
-        None => {
-            let mut keys: Vec<&str> = STATION_TO_ID.keys().map(|&val| val).collect();
-            keys.sort();
-            Err(format!(
-                "Invalid city name, choose from: {}.",
-                keys.join(", ")
-            ))
-        }
     }
 }
 
@@ -97,12 +78,12 @@ struct Opt {
     adults: i16,
 
     /// Start station
-    #[structopt(parse(try_from_str = parse_station), default_value = "London")]
-    from: i32,
+    #[structopt(default_value = "London")]
+    from: String,
 
     /// Finish station
-    #[structopt(parse(try_from_str = parse_station), default_value = "Paris")]
-    to: i32,
+    #[structopt(default_value = "Paris")]
+    to: String,
 }
 
 #[tokio::main]
@@ -119,11 +100,19 @@ async fn main() {
         .exit();
     }
 
-    let travels = match date::get_possible_travel_dates(opt.since, opt.until, opt.days, opt.weekday)
-    {
-        Ok(res) => res,
-        Err(err) => clap::Error::value_validation_auto(err.to_string()).exit(),
-    };
+    let stations_map = get_stations_map(&opt.api_key).await.unwrap_or_else(|err| {
+        error!("{:?}", err);
+        std::process::exit(1);
+    });
+
+    let mut stations: [i32; 2] = [0, 0];
+    for (i, station) in [opt.from, opt.to].iter().enumerate() {
+        stations[i] = parse_station(&station, &stations_map)
+            .unwrap_or_else(|err| clap::Error::value_validation_auto(err).exit());
+    }
+
+    let travels = date::get_possible_travel_dates(opt.since, opt.until, opt.days, opt.weekday)
+        .unwrap_or_else(|err| clap::Error::value_validation_auto(err.to_string()).exit());
 
     if travels.is_empty() {
         clap::Error::value_validation_auto(
@@ -145,8 +134,8 @@ async fn main() {
     let journeys = match get_journeys(
         &travels,
         &opt.api_key,
-        opt.from,
-        opt.to,
+        stations[0],
+        stations[1],
         opt.adults,
         &filter,
     )
@@ -198,6 +187,21 @@ fn format_results(mut journeys: Vec<TrainJourney>, sort_by: SortBy) -> Table {
         ]);
     }
     table
+}
+
+fn parse_station(name: &str, station_map: &HashMap<String, i32>) -> Result<i32, String> {
+    match station_map.get(name) {
+        Some(res) => Ok(*res),
+        None => {
+            let mut keys: Vec<&str> = station_map.keys().map(|val| val.as_str()).collect();
+            keys.sort();
+            Err(format!(
+                "'{}' is invalid city name, choose from: {}.",
+                name,
+                keys.join(", ")
+            ))
+        }
+    }
 }
 
 fn setup_logging(level: usize) {

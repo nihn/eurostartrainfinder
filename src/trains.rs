@@ -1,16 +1,20 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use futures::future;
 use log::{debug, trace, warn};
+use maplit::hashmap;
 use reqwest::{Client, Error, Response};
 use serde::Deserialize;
 use serde_json;
+use std::collections::HashMap;
 
 use crate::date;
 
 #[cfg(test)]
 use mockito;
 
-static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa/train-search/uk-en";
+static EUROSTAR_URL: &str = "https://api.prod.eurostar.com/bpa";
+static SEARCH_LOCATION: &str = "train-search/uk-en";
+static STATIONS_LOCATION: &str = "hotels-search/regions/uk-en";
 static API_KEY_HEADER: &str = "x-apikey";
 
 #[derive(Debug, PartialEq)]
@@ -36,18 +40,6 @@ pub struct Filter {
     pub out_departure_before: Option<NaiveTime>,
     pub in_departure_after: Option<NaiveTime>,
     pub in_departure_before: Option<NaiveTime>,
-}
-
-impl Filter {
-    pub fn new() -> Filter {
-        Filter {
-            max_price: None,
-            out_departure_after: None,
-            out_departure_before: None,
-            in_departure_before: None,
-            in_departure_after: None,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -88,6 +80,20 @@ struct ResponseJson {
     inbound: Option<InOrOut>,
 }
 
+#[derive(Deserialize, Debug)]
+struct Station {
+    #[serde(rename = "regionName")]
+    station_name: String,
+    #[serde(rename = "stationId")]
+    station_id: i32,
+}
+
+#[derive(Deserialize, Debug)]
+struct StationsResponseJson {
+    #[serde(flatten)]
+    extra: HashMap<String, Station>,
+}
+
 fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), filter: &Filter) -> Vec<TrainJourney> {
     let mut res = Vec::new();
 
@@ -124,6 +130,38 @@ fn filter_journeys(trains: &(Vec<Train>, Vec<Train>), filter: &Filter) -> Vec<Tr
         }
     }
     res
+}
+
+pub async fn get_stations_map(api_key: &str) -> Result<HashMap<String, i32>, QueryError> {
+    let client = Client::new();
+    let response = do_request(&client, STATIONS_LOCATION, api_key, hashmap! {}).await?;
+    let text = response.text().await.map_err(QueryError::ReqwestError)?;
+
+    let json: StationsResponseJson = match serde_json::from_str(&text) {
+        Ok(res) => res,
+        Err(err) => {
+            debug!("Invalid JSON: {}", text);
+            return Err(QueryError::JsonParseError(format!(
+                "Error while parsing JSON: {:?}",
+                err
+            )));
+        }
+    };
+
+    let mut stations = HashMap::new();
+
+    for (_, station) in json.extra.into_iter() {
+        stations.insert(station.station_name, station.station_id);
+    }
+
+    if stations.is_empty() {
+        return Err(QueryError::InternalError(
+            "Server returned empty Station Name to Station ID".into(),
+        ));
+    }
+
+    debug!("Got stations map: {:#?}", stations);
+    Ok(stations)
 }
 
 pub async fn get_journeys(
@@ -166,21 +204,40 @@ async fn get_trains(
     until: NaiveDate,
     adults: i16,
 ) -> Result<(Vec<Train>, Vec<Train>), QueryError> {
+    let response = do_request(
+        client,
+        &format!("{}/{}/{}", SEARCH_LOCATION, from, to),
+        api_key,
+        hashmap! {
+            "outbound-date" => format_date(since),
+            "inbound-date" => format_date(until),
+            "adult" => adults.to_string(),
+        },
+    )
+    .await?;
+
+    let trains = parse_response(response, since, until).await;
+
+    trains
+}
+
+async fn do_request(
+    client: &Client,
+    location: &str,
+    api_key: &str,
+    query_params: HashMap<&str, String>,
+) -> Result<Response, QueryError> {
     #[cfg(test)]
     let url = &mockito::server_url();
     #[cfg(not(test))]
     let url = EUROSTAR_URL;
 
     let request = client
-        .get(&format!("{}/{}/{}", url, from, to))
-        .query(&[
-            ("outbound-date", format_date(since)),
-            ("inbound-date", format_date(until)),
-            ("adult", adults.to_string()),
-        ])
+        .get(&format!("{}/{}", url, location))
+        .query(&query_params)
         .header(API_KEY_HEADER, api_key);
 
-    debug!("Prepared request: {:?}", request);
+    println!("Prepared request: {:?}", request);
 
     let response = request.send().await.map_err(QueryError::ReqwestError)?;
 
@@ -202,10 +259,7 @@ async fn get_trains(
     } else {
         debug!("Got {} response", status);
     }
-
-    let trains = parse_response(response, since, until).await;
-
-    trains
+    Ok(response)
 }
 
 async fn parse_response(
@@ -263,38 +317,48 @@ fn format_date(date: NaiveDate) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::trains::{get_journeys, Filter, QueryError, TrainJourney};
+    use super::*;
     use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
-    use mockito::{mock, Mock};
+    use mockito::{mock, Matcher, Mock};
 
     static API_KEY: &str = "api-key";
     static FROM: i32 = 123;
     static TO: i32 = 321;
 
+    impl Filter {
+        fn new() -> Filter {
+            Filter {
+                max_price: None,
+                out_departure_after: None,
+                out_departure_before: None,
+                in_departure_before: None,
+                in_departure_after: None,
+            }
+        }
+    }
     fn create_mock() -> (Vec<(NaiveDate, NaiveDate)>, Mock) {
         let dates = vec![(
             NaiveDate::from_ymd(2020, 04, 05),
             NaiveDate::from_ymd(2020, 04, 07),
         )];
-
         let mock = mock(
             "GET",
-            format!(
-                "/{}/{}?outbound-date={}&inbound-date={}&adult=2",
-                FROM, TO, dates[0].0, dates[0].1
-            )
-            .as_str(),
+            Matcher::Exact(format!("/{}/{}/{}", SEARCH_LOCATION, FROM, TO)),
         )
-        .with_header("content-type", "application/json")
-        .match_header("x-apikey", API_KEY);
-
+        .match_query(Matcher::AllOf(vec![
+            Matcher::UrlEncoded("outbound-date".into(), dates[0].0.to_string().into()),
+            Matcher::UrlEncoded("inbound-date".into(), dates[0].1.to_string().into()),
+            Matcher::UrlEncoded("adult".into(), "2".into()),
+        ]))
+        .match_header("x-apikey", API_KEY)
+        .with_header("content-type", "application/json");
         (dates, mock)
     }
 
     #[tokio::test]
     async fn test_get_journeys_filtered_by_max_price() {
-        let (dates, mut mock) = create_mock();
-        mock = mock
+        let (dates, mock) = create_mock();
+        let _mock = mock
             .with_status(200)
             .with_body(include_str!("test_resources/response.json"))
             .create();
@@ -320,8 +384,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_journeys_no_filters() {
-        let (dates, mut mock) = create_mock();
-        mock = mock
+        let (dates, mock) = create_mock();
+        let _mock = mock
             .with_status(200)
             .with_body(include_str!("test_resources/response.json"))
             .create();
@@ -404,8 +468,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_journeys_filtered_by_time() {
-        let (dates, mut mock) = create_mock();
-        mock = mock
+        let (dates, mock) = create_mock();
+        let _mock = mock
             .with_status(200)
             .with_body(include_str!("test_resources/response.json"))
             .create();
@@ -434,8 +498,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_journeys_all_filters() {
-        let (dates, mut mock) = create_mock();
-        mock = mock
+        let (dates, mock) = create_mock();
+        let _mock = mock
             .with_status(200)
             .with_body(include_str!("test_resources/response.json"))
             .create();
@@ -526,6 +590,56 @@ mod tests {
                 "get_journeys returned {:?}, it should return QueryError::JsonParseError!",
                 default
             ),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_stations_map_ok() {
+        let _mock = mock("GET", format!("/{}", STATIONS_LOCATION).as_str())
+            .with_header(API_KEY_HEADER, API_KEY)
+            .with_body(include_str!("test_resources/stations.json"))
+            .with_status(200)
+            .create();
+
+        let stations = get_stations_map(API_KEY).await.unwrap();
+
+        assert_eq!(
+            stations,
+            hashmap! {"London".to_string() => 7015400, "Ashford".to_string() => 7054660}
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_stations_map_invalid_json() -> Result<(), String> {
+        let _mock = mock("GET", format!("/{}", STATIONS_LOCATION).as_str())
+            .with_header(API_KEY_HEADER, API_KEY)
+            .with_body("{foo")
+            .with_status(200)
+            .create();
+
+        match get_stations_map(API_KEY).await {
+            Err(QueryError::JsonParseError(err)) => Ok(()),
+            default => Err(format!(
+                "get_stations_map returned: {:?} should return JsonParseError!",
+                default
+            )),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_stations_map_empty_json() -> Result<(), String> {
+        let _mock = mock("GET", format!("/{}", STATIONS_LOCATION).as_str())
+            .with_header(API_KEY_HEADER, API_KEY)
+            .with_body("{}")
+            .with_status(200)
+            .create();
+
+        match get_stations_map(API_KEY).await {
+            Err(QueryError::InternalError(err)) => Ok(()),
+            default => Err(format!(
+                "get_stations_map returned: {:?} should return InternalError!",
+                default
+            )),
         }
     }
 }

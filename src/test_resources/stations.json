@@ -1,0 +1,14 @@
+{
+   "7015400":{
+      "regionId":279,
+      "regionName":"London",
+      "stationId":7015400,
+      "stationName":"London St Pancras"
+   },
+   "7054660":{
+      "regionId":100,
+      "regionName":"Ashford",
+      "stationId":7054660,
+      "stationName":"Ashford International"
+   }
+}
