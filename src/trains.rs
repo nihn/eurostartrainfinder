@@ -237,7 +237,7 @@ async fn do_request(
         .query(&query_params)
         .header(API_KEY_HEADER, api_key);
 
-    println!("Prepared request: {:?}", request);
+    debug!("Prepared request: {:?}", request);
 
     let response = request.send().await.map_err(QueryError::ReqwestError)?;
 
